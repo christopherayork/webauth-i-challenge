@@ -3,7 +3,21 @@ const server = express();
 const userDB = require('./helpers/users');
 const bcrypt = require('bcryptjs');
 const restricted = require('./middleware/authenticate');
+const session = require('express-session');
 server.use(express.json());
+server.use(
+  session({
+    name: 'notsession',
+    secret: 'This is all fake',
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000,
+      secure: true
+    },
+    httpOnly: true,
+    resave: false,
+    saveUninitialized: false
+  })
+);
 
 server.get('/api/users', (req, res) => {
   userDB.find()
@@ -38,16 +52,17 @@ server.post('/api/register', (req, res) => {
 
 server.post('/api/login', (req, res) => {
   const credentials = req.body;
-
   userDB.findBy(credentials.username)
     .first()
     .then(user => {
       console.log(user);
+      req.session.userID = user.id;
+      console.log(req.session);
       if(!credentials || !bcrypt.compareSync(credentials.password, user.password)) {
         res.status(401).json({ error: 'Incorrect credentials' });
       }
       else {
-        res.status(200).json({ message: `Welcome ${user.username}` });
+        res.status(200).json({ message: `Welcome ${user.username}`, id: req.session.id, userID: req.session.userID });
       }
     })
     .catch(e => {
