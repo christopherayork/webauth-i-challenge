@@ -2,6 +2,7 @@ const express = require('express');
 const server = express();
 const userDB = require('./helpers/users');
 const bcrypt = require('bcryptjs');
+const restricted = require('./middleware/authenticate');
 server.use(express.json());
 
 server.get('/api/users', (req, res) => {
@@ -53,6 +54,11 @@ server.post('/api/login', (req, res) => {
       console.error(e);
       res.status(500).json({ errorMessage: 'Could not complete request' });
     });
+});
+
+server.use('/api/restricted', restricted);
+server.get('/api/restricted/first', (req, res) => {
+  res.status(200).json({ message: 'Success' });
 });
 
 
