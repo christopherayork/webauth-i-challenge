@@ -1,25 +1,39 @@
 const express = require('express');
 const server = express();
+const helmet = require('helmet');
+const cors = require('cors');
+const dbConfig = require('./data/dbConfig');
 const userDB = require('./helpers/users');
 const bcrypt = require('bcryptjs');
 const restricted = require('./middleware/authenticate');
 const session = require('express-session');
-server.use(express.json());
-server.use(
-  session({
-    name: 'notsession',
-    secret: 'This is all fake',
-    cookie: {
-      maxAge: 24 * 60 * 60 * 1000,
-      secure: true
-    },
-    httpOnly: true,
-    resave: false,
-    saveUninitialized: false
-  })
-);
+const KnexSessionStore = require('connect-session-knex')(session);
 
-server.get('/api/users', (req, res) => {
+const sessionConfig = {
+  name: 'rockyroad',
+  secret: process.env.SESSION_SECRET || 'This is all fake',
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000,
+    secure: false,
+    httpOnly: true
+  },
+  resave: false,
+  saveUninitialized: false,
+  store: new KnexSessionStore({
+    knex: dbConfig,
+    tablename: 'knexsessions',
+    sidfieldname: 'sessionid',
+    createtable: true,
+    clearInterval: 1000 * 60 * 30,
+  }),
+};
+
+server.use(helmet());
+server.use(express.json());
+server.use(cors());
+server.use(session(sessionConfig));
+
+server.get('/api/users', restricted, (req, res) => {
   userDB.find()
     .then(r => {
       console.log(r);
@@ -56,13 +70,12 @@ server.post('/api/login', (req, res) => {
     .first()
     .then(user => {
       console.log(user);
-      req.session.userID = user.id;
-      console.log(req.session);
       if(!credentials || !bcrypt.compareSync(credentials.password, user.password)) {
         res.status(401).json({ error: 'Incorrect credentials' });
       }
       else {
-        res.status(200).json({ message: `Welcome ${user.username}`, id: req.session.id, userID: req.session.userID });
+        req.session.user = user;
+        res.status(200).json({ message: `Welcome ${user.username}`});
       }
     })
     .catch(e => {
